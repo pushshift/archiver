@@ -71,12 +71,6 @@ class Ingest():
         for obj in json_data:
             print(obj['source'],obj['event'])
 
-
-#conn = dbconnector.pool.getconn()
-#cur = conn.cursor()
-#cur.execute("SELECT count(*) from source")
-#print(cur.fetchall())
-
 ARCHIVE_TOKEN = os.environ.get('ARCHIVE_TOKEN')
 api = falcon.API()
 api.add_route('/ingest', Ingest())
