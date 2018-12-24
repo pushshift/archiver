@@ -38,7 +38,7 @@ class ProcessSafePoolManager:
 config = configparser.ConfigParser()
 config.read("credentials.ini")
 psql_config = config['psql_database']
-pool = ProcessSafePoolManager(25, 100, user = psql_config['user'],
+pool = ProcessSafePoolManager(10, 25, user = psql_config['user'],
                                                       password = psql_config['password'],
                                                       host = psql_config['host'],
                                                       port = psql_config['port'],

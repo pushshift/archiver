@@ -8,7 +8,7 @@ import brotli
 import os
 import psycopg2
 import dbconnector
-
+import helpers
 
 # Eventually all the try / except catching on the DB pool connection objects should be handled via extending / subclassing
 # the cursor object: http://initd.org/psycopg/docs/advanced.html
@@ -40,14 +40,15 @@ class Testpool():
                 if conn: dbconnector.pool.putconn(conn)
                 raise falcon.HTTPServiceUnavailable(title='The database is currently offline. Please try again later.')
 
-        resp.body = json.dumps(cur.fetchall()[0])
 
 class Ingest():
     def on_post(self, req, resp):
         post_data = req.stream.read()
-        token = req.get_header('Token',required=True)
+        print(len(post_data))
+        #resp.body = json.dumps(['a','b'])
+        auth_type, token = req.get_header('Authorization',required=True).split()
 
-        if token != ARCHIVE_TOKEN:
+        if token != ARCHIVE_TOKEN or auth_type.lower() != 'bearer':
             raise falcon.HTTPUnauthorized(title="Invalid Token")
 
         content_encoding = req.get_header('Content-Encoding')
@@ -76,11 +77,38 @@ class Ingest():
         except Exception as e:
             raise falcon.HTTPUnprocessableEntity(title='Payload data is not valid JSON',description=e)
 
-        # Check if each data element has the required fields
+#        resp.body = json.dumps(['a','b'])
+
+        db_data = []
+
         for obj in json_data:
-            print(obj['source'],obj['event'])
+            source = obj.get('source')
+            entity = obj.get('entity')
+            id = obj.get('id')
+            retrieved_utc = obj.get('retrieved_utc')
+            if "{}-{}".format(source,entity) not in thing_ids:
+                thing_ids.update(helpers.get_thing_id(dbconnector.pool.getconn(),source,entity))
+            thing_id = thing_ids["{}-{}".format(source,entity)]
+            db_data.append((thing_id,id,retrieved_utc,json.dumps(obj['data']).encode()))
+
+        if db_data:
+            conn = dbconnector.pool.getconn()
+            cur = conn.cursor()
+            sql = "INSERT INTO archive (thing_id,item_id,retrieved_utc,data) VALUES {} ON CONFLICT (thing_id,item_id) DO NOTHING"
+            args_str = b','.join(cur.mogrify("(%s,%s,%s,%s)", x) for x in db_data)
+            sql = sql.format(args_str.decode("utf-8"))
+            cur.execute(sql)
+            conn.commit()
+            dbconnector.pool.putconn(conn)
+
 
 ARCHIVE_TOKEN = os.environ.get('ARCHIVE_TOKEN')
+conn = dbconnector.pool.getconn()
+#print (conn.encoding)
+thing_ids = {}
+thing_ids = helpers.get_all_things(conn)
+#thing_id = helpers.get_thing_id(conn,'a','b')
+#print(thing_ids)
 api = falcon.API()
 api.add_route('/ingest', Ingest())
 api.add_route('/testpool',Testpool())
