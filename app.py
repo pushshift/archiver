@@ -9,12 +9,21 @@ import os
 import psycopg2
 import dbconnector
 
+
+# Eventually all the try / except catching on the DB pool connection objects should be handled via extending / subclassing
+# the cursor object: http://initd.org/psycopg/docs/advanced.html
+#
+# The following code words for now but can be optimized later (right)
+#
+#
+
 class Testpool():
     def on_get(self, req, resp):
-        conn = None
+
+        conn = dbconnector.pool.getconn()
+
         try:
             conn_failure = False
-            conn = dbconnector.pool.getconn()
             cur = conn.cursor()
             cur.execute("SELECT count(*) from source")
         except psycopg2.OperationalError as e:  # Something is FUBAR with the DB so try to reconnect
